@@ -177,11 +177,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
     if (!left) return cb();
     m.forEach(function (x) { var el = document.createElement('script'); el.src = x.file + '?v=' + (x.v || 1); el.onload = el.onerror = function () { if (--left === 0) { CH.sort(function (p, q) { return m.findIndex(function (z) { return z.id === p.id; }) - m.findIndex(function (z) { return z.id === q.id; }); }); cb(); } }; document.head.appendChild(el); });
   }
+  function nm(c) { return !c.model; }
   function chosen() { return CH.filter(function (c) { return CFG.ch.indexOf(c.id) >= 0; }); }
   function topicsOf() { var t = []; chosen().forEach(function (c) { c.questions.forEach(function (q) { if (t.indexOf(q.t) < 0) t.push(q.t); }); }); return t; }
   function avail() { var r = []; chosen().forEach(function (c) { c.questions.forEach(function (q) { if (CFG.tp.length && CFG.tp.indexOf(q.t) < 0) return; if (CFG.prev && !q.p) return; r.push(q); }); }); return r; }
   function normalize() {
-    var ids = CH.map(function (c) { return c.id; });
+    var ids = CH.filter(nm).map(function (c) { return c.id; });
     CFG.ch = (CFG.ch || []).filter(function (i) { return ids.indexOf(i) >= 0; });
     if (!CFG.ch.length && ids.length) CFG.ch = [ids[ids.length - 1]];
     var tp = topicsOf(); CFG.tp = CFG.tp.filter(function (t) { return tp.indexOf(t) >= 0; });
@@ -203,11 +204,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
     var A = avail(), n = A.length, k = CFG.cnt ? Math.min(CFG.cnt, n) : n, tps = topicsOf();
     var hasP = chosen().some(function (c) { return c.questions.some(function (q) { return q.p; }); });
     var exam = CFG.mode === 'exam';
-    var chH = CH.map(function (c) { return chip('ch', c.id, esc(c.subject + ' ' + c.paper.replace(/\s*·\s*/, ' – ') + ': ' + c.title) + ' (' + toBn(c.questions.length) + ')', CFG.ch.indexOf(c.id) >= 0); }).join('');
+    var chH = CH.filter(nm).map(function (c) { return chip('ch', c.id, esc(c.subject + ' ' + c.paper.replace(/\s*·\s*/, ' – ') + ': ' + c.title) + ' (' + toBn(c.questions.length) + ')', CFG.ch.indexOf(c.id) >= 0); }).join('');
     var tpH = chip('tp', '*', 'সব টপিক', !CFG.tp.length) + tps.map(function (t) { return chip('tp', t, esc(t), CFG.tp.indexOf(t) >= 0); }).join('');
+    var mdl = CH.filter(function (c) { return c.model; }).map(function (c) { return '<div class="exam-card" style="margin-top:10px"><div><b>' + esc(c.title) + '</b><div class="meta num"><span>' + esc(c.subject) + '</span><span>' + toBn(c.questions.length) + 'টি প্রশ্ন</span><span>' + toBn(Math.ceil(c.questions.length * 36 / 60)) + ' মিনিট</span><span>ভুলে ০.২৫ কাটা</span></div></div><button class="btn primary" data-act="model" data-v="' + esc(c.id) + '">টেস্ট শুরু করো</button></div>'; }).join('');
     app.innerHTML =
       '<div class="topbar"><div class="brand">মেডিকেল মক টেস্ট<small>যেকোনো সময়, যতবার খুশি অনুশীলন করো</small></div></div>' +
       '<div class="hero"><h1>মেডিকেল ভর্তি প্রস্তুতি</h1><p>অধ্যায় ও টপিক বেছে নাও, পরীক্ষা বা প্র্যাকটিস মোডে প্রশ্ন দাও। শেষে প্রতিটি প্রশ্নের সঠিক উত্তর ও ব্যাখ্যা পাবে।</p></div>' +
+      (mdl ? '<div class="card" style="margin-bottom:16px"><h3 class="sec" style="margin:0">📝 মডেল টেস্ট (পূর্ণাঙ্গ পরীক্ষা)</h3>' + mdl + '</div>' : '') +
       '<div class="card">' +
         '<h3 class="sec" style="margin-top:0">১. অধ্যায় (একাধিক বাছাই করা যায়)</h3><div class="filters tight">' + chH + '</div>' +
         '<h3 class="sec">২. টপিক ফিল্টার</h3><div class="filters tight">' + tpH + '</div>' +
@@ -226,6 +229,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
     var b = e.target.closest('[data-act]'); if (!b || S) return;
     var a = b.getAttribute('data-act'), v = b.getAttribute('data-v');
     var tog = function (arr, x) { var i = arr.indexOf(x); if (i >= 0) arr.splice(i, 1); else arr.push(x); };
+    if (a === 'model') { var mc = CH.filter(function (c) { return c.id === v; })[0]; startExam(CFG.name, mc.questions.slice(), { mode: 'exam', neg: true, pq: 36, ch: mc }); return; }
     if (a === 'go') { startExam(CFG.name); return; }
     if (a === 'ch') { tog(CFG.ch, v); if (!CFG.ch.length) CFG.ch = [v]; }
     else if (a === 'tp') { if (v === '*') CFG.tp = []; else tog(CFG.tp, v); }
@@ -238,16 +242,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
     saveCfg(); showStart();
   };
 
-  function startExam(name, pool) {
+  function startExam(name, pool, o) {
     var src = pool || shuffle(avail());
     if (!pool) src = src.slice(0, CFG.cnt ? Math.min(CFG.cnt, src.length) : src.length);
-    var sel = chosen();
+    var sel = o ? [o.ch] : chosen();
     if (sel.length === 1) { EXAM.title = sel[0].title; EXAM.subject = sel[0].subject; EXAM.paper = sel[0].paper; }
     else { EXAM.title = 'মিশ্র অনুশীলন'; EXAM.subject = 'একাধিক অধ্যায়'; EXAM.paper = toBn(sel.length) + 'টি অধ্যায়'; }
     EXAM.questions = src.map(prep); N = EXAM.questions.length;
-    NEG = CFG.neg ? 0.25 : 0; PER_Q = CFG.pq; DURATION = N * PER_Q;
-    var timed = CFG.mode === 'exam';
-    S = { name: name, mode: CFG.mode, timed: timed, cur: 0, ans: new Array(N).fill(-1), mark: new Array(N).fill(false), left: DURATION, used: 0, confirming: false, done: false, filter: 'all' };
+    NEG = (o ? o.neg : CFG.neg) ? 0.25 : 0; PER_Q = o ? o.pq : CFG.pq; DURATION = N * PER_Q;
+    var mode = o ? o.mode : CFG.mode, timed = mode === 'exam';
+    S = { name: name, o: o, mode: mode, timed: timed, cur: 0, ans: new Array(N).fill(-1), mark: new Array(N).fill(false), left: DURATION, used: 0, confirming: false, done: false, filter: 'all' };
     clearInterval(tick);
     tick = setInterval(function () {
       S.used++;
@@ -378,9 +382,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
     Array.prototype.forEach.call(app.querySelectorAll('.chip'), function (b) {
       b.onclick = function () { S.filter = b.getAttribute('data-f'); renderResult(); };
     });
-    document.getElementById('again').onclick = function () { startExam(S.name); };
+    document.getElementById('again').onclick = function () { if (S.o) startExam(S.name, S.o.ch.questions.slice(), { mode: 'exam', neg: true, pq: 36, ch: S.o.ch }); else startExam(S.name); };
     var rt = document.getElementById('retry');
-    if (rt) rt.onclick = function () { var p = EXAM.questions.filter(function (q, i) { return S.ans[i] !== q.a; }); startExam(S.name, p); };
+    if (rt) rt.onclick = function () { var p = EXAM.questions.filter(function (q, i) { return S.ans[i] !== q.a; }); startExam(S.name, p, S.o ? { mode: 'practice', neg: true, pq: 36, ch: S.o.ch } : undefined); };
     document.getElementById('home').onclick = showStart;
   }
 
